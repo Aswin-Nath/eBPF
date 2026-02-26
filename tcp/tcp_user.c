@@ -5,7 +5,6 @@
 #include <bpf/libbpf.h>
 #include "tcp.skel.h"
 
-static volatile sig_atomic_t exiting = 0;
 
 struct tcp_info1 {
     __u32 pid;
@@ -19,11 +18,6 @@ struct tcp_info1 {
     char comm[16];
 };
 
-
-static void handle_signal(int sig)
-{
-    exiting = 1;
-}
 
 
 static int handle_event(void *ctx, void *data, size_t len)
@@ -53,8 +47,6 @@ int main(void)
     struct ring_buffer *rb = NULL;
     int err;
 
-    signal(SIGINT, handle_signal);
-    signal(SIGTERM, handle_signal);
 
     skel = tcp_bpf__open_and_load();
     if (!skel) {
@@ -68,12 +60,7 @@ int main(void)
         goto cleanup;
     }
 
-    rb = ring_buffer__new(
-        bpf_map__fd(skel->maps.events),
-        handle_event,
-        NULL,
-        NULL
-    );
+    rb = ring_buffer__new(bpf_map__fd(skel->maps.events),handle_event,NULL,NULL);
 
     if (!rb) {
         fprintf(stderr, "Failed to create ring buffer\n");
@@ -82,7 +69,7 @@ int main(void)
 
     printf("TCP tracer running... Press Ctrl+C to exit.\n");
 
-    while (!exiting) {
+    while (true) {
         err = ring_buffer__poll(rb, 100);
         if (err == -EINTR)
             break;

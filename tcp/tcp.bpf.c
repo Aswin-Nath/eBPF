@@ -44,30 +44,27 @@ int BPF_KPROBE(tcp_v4_connect,struct sock *sk){
     __u32 tid  = (__u32)tgid;
 
     struct tcp_info1 *event;
-
+    char comm[16];
+    bpf_get_current_comm(&comm,sizeof(comm));
+    if(comm[0]!='c' || comm[1]!='u' || comm[2]!='r' || comm[3]!='l'){
+        return 0;
+    }
     event = bpf_ringbuf_reserve(&events,sizeof(*event),0);
-
     if(!event){
         return 0;
     }
-
     __builtin_memset(event,0,sizeof(*event));      
-
     event->pid = pid;
     event->tid = tid;
     event->type = 0;
     bpf_get_current_comm(&event->comm,sizeof(event->comm));
-
     if(pid){
         __u64 sk_key = (__u64)sk;   
-        bpf_map_update_elem(&sk_to_pid,&sk_key,&pid,BPF_EXIST);
+        bpf_map_update_elem(&sk_to_pid,&sk_key,&pid,BPF_ANY);
     }
-    
     bpf_ringbuf_submit(event,0);
     return 0;
 }
-
-
 
 
 SEC("kprobe/tcp_v6_connect")
@@ -76,21 +73,23 @@ int BPF_KPROBE(tcp_v6_connect,struct sock *sk){
     __u32 pid = tgid >> 32;
     __u32 tid = (__u32)tgid;
     struct tcp_info1 *event;
+    char comm[16];
+    bpf_get_current_comm(&comm,sizeof(comm));
+    if(comm[0]!='c' || comm[1]!='u' || comm[2]!='r' || comm[3]!='l'){
+        return 0;
+    }
     event = bpf_ringbuf_reserve(&events,sizeof(*event),0);
     if(!event){
         return 0;
     }
     __builtin_memset(event,0,sizeof(*event));
-
     event->pid = pid;
     event->tid = tid;
     event->type = 1;
-
     bpf_get_current_comm(&event->comm,sizeof(event->comm));
-
     if(pid){
         __u64 sk_key = (__u64)sk;   
-        bpf_map_update_elem(&sk_to_pid,&sk_key,&pid,BPF_EXIST);
+        bpf_map_update_elem(&sk_to_pid,&sk_key,&pid,BPF_ANY);
     }
     bpf_ringbuf_submit(event,0);
     return 0;
@@ -99,14 +98,19 @@ int BPF_KPROBE(tcp_v6_connect,struct sock *sk){
 SEC("kprobe/tcp_set_state")
 int BPF_KPROBE(tcp_set_state,struct sock *sk,int state){
     struct tcp_info1 *event;
-
+    char comm[16];
+    bpf_get_current_comm(&comm,sizeof(comm));
+    if(comm[0]!='c' || comm[1]!='u' || comm[2]!='r' || comm[3]!='l'){
+        return 0;
+    }
     event = bpf_ringbuf_reserve(&events, sizeof(*event), 0);
     if (!event)
         return 0;
+    __u64 sk_key = (__u64)sk;
 
     __builtin_memset(event, 0, sizeof(*event));
 
-    __u32 *pid = bpf_map_lookup_elem(&sk_to_pid, &sk);
+    __u32 *pid = bpf_map_lookup_elem(&sk_to_pid, &sk_key);
 
     __u16 dport = BPF_CORE_READ(sk, __sk_common.skc_dport);
 
